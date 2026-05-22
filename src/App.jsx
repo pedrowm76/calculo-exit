@@ -486,8 +486,24 @@ export default function App() {
         const secondaryTax = p.secondaryTax || 0;
         const secondaryNet = p.secondaryNet || 0;
 
+        // Compounding early cash flows with CDI yield (Time Value of Money adjustment)
+        const safeYield = Number(company.safeYieldRate) || 0;
+        
+        // Secondary received early in rounds (on average Year 2 of the period)
+        const secondaryYears = Math.max(1, pYears - 2);
+        const secondaryCDIMult = Math.pow(1 + safeYield / 100, secondaryYears);
+        const secondaryNetCDI = secondaryNet * secondaryCDIMult;
+
+        // Dividends received annually on average throughout the period
+        const divCDIMult = (safeYield > 0 && pYears > 0) 
+          ? ((Math.pow(1 + safeYield / 100, pYears) - 1) / (safeYield / 100)) / pYears 
+          : 1;
+        const divsLiquidoCDI = divsLiquido * divCDIMult;
+
         const totalTaxPaid = upfrontTax + earnoutTax + divsTax + secondaryTax;
-        const totalLiquido = upfrontLiquido + earnoutLiquido + divsLiquido + secondaryNet;
+        const totalLiquidoNominal = upfrontLiquido + earnoutLiquido + divsLiquido + secondaryNet;
+        const totalLiquido = upfrontLiquido + earnoutLiquido + divsLiquidoCDI + secondaryNetCDI;
+        const earlyCDIInterest = totalLiquido - totalLiquidoNominal;
 
         return {
           ...p,
@@ -504,7 +520,9 @@ export default function App() {
           secondaryTax,
           secondaryNet,
           totalTaxPaid,
-          totalLiquido
+          totalLiquido,
+          totalLiquidoNominal,
+          earlyCDIInterest
         };
       });
     };
@@ -1654,14 +1672,20 @@ ${recText}`;
                     </div>
 
                     <div className="space-y-3 border-t border-slate-100 pt-4 flex flex-col justify-between h-full">
-                      <div>
+                      <div className="space-y-2.5">
                         <div className="flex justify-between py-1 text-red-700 font-bold bg-red-50 p-2 rounded-xl">
                           <span>Total Impostos Pagos (Leão)</span>
                           <span>- {formatCurrency(activeFundResult.totalTaxPaid)}</span>
                         </div>
+                        {activeFundResult.earlyCDIInterest > 0 && (
+                          <div className="flex justify-between py-1 text-emerald-600 font-semibold bg-emerald-50/40 p-2 rounded-xl border border-emerald-100/50">
+                            <span>+ Rendimento CDI sobre Liquidez Antecipada</span>
+                            <span>+ {formatCurrency(activeFundResult.earlyCDIInterest)}</span>
+                          </div>
+                        )}
                       </div>
                       <div className="bg-slate-900 text-emerald-400 p-4 rounded-2xl flex justify-between items-center font-bold text-lg shadow-inner">
-                        <span>Líquido no Bolso (Total Esperado)</span>
+                        <span>Líquido no Bolso (Total c/ CDI)</span>
                         <span>{formatCurrency(activeFundResult.totalLiquido)}</span>
                       </div>
                     </div>
